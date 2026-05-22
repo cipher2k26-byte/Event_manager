@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eventide — Event Manager</title>
+
+  <!-- ================================================
+       SOURCE: styles.css
+       ================================================ -->
+  <style>
+/* ─────────────────────────────────────────────────────────────────────────────
+   styles.css — Eventide Event Manager
+   ───────────────────────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@300;400;500&family=Crimson+Pro:wght@300;400;600&display=swap');
+
+/* ── Variables ─────────────────────────────────────────────────────────────── */
+:root {
+  --bg:         #0d0d0f;
+  --surface:    #141418;
+  --surface2:   #1c1c22;
+  --border:     #2a2a35;
+  --accent:     #c8a96e;
+  --accent2:    #7c6fcd;
+  --danger:     #e05c6a;
+  --success:    #4ecb8d;
+  --text:       #e8e4da;
+  --text-muted: #7a7a8a;
+  --text-dim:   #4a4a5a;
+  --glow:       rgba(200, 169, 110, 0.15);
+}
+
+/* ── Reset ─────────────────────────────────────────────────────────────────── */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Crimson Pro', serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Grain overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.4;
+}
+
+/* ── Header ────────────────────────────────────────────────────────────────── */
+header {
+  border-bottom: 1px solid var(--border);
+  padding: 1.5rem 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  background: rgba(13,13,15,0.92);
+  backdrop-filter: blur(12px);
+  z-index: 100;
+}
+
+.logo {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.7rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+}
+.logo span { color: var(--text); font-style: italic; font-weight: 400; }
+
+.header-meta {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-align: right;
+  line-height: 1.6;
+}
+.header-meta strong { color: var(--accent); }
+
+/* ── Notification Bar ──────────────────────────────────────────────────────── */
+#notif-bar {
+  position: fixed;
+  top: 72px;
+  right: 1.5rem;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 340px;
+}
+
+.notif-card {
+  background: var(--surface2);
+  border: 1px solid var(--accent);
+  border-left: 4px solid var(--accent);
+  padding: 0.85rem 1.1rem;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  animation: slideIn 0.35s ease;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+.notif-card.urgent  { border-color: var(--danger); }
+.notif-card.done    { opacity: 0.5; border-color: var(--text-dim); }
+
+.notif-icon { font-size: 1.1rem; }
+.notif-text { flex: 1; }
+.notif-title {
+  font-weight: 600;
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-family: 'DM Mono', monospace;
+}
+.notif-body  { color: var(--text); margin-top: 0.15rem; }
+.notif-close {
+  background: none; border: none;
+  color: var(--text-muted);
+  cursor: pointer; font-size: 1rem;
+  padding: 0; line-height: 1; flex-shrink: 0;
+}
+.notif-close:hover { color: var(--text); }
+
+@keyframes slideIn {
+  from { transform: translateX(30px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* ── Layout ────────────────────────────────────────────────────────────────── */
+.container {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 2.5rem;
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 2.5rem;
+  align-items: start;
+}
+
+.sidebar { position: sticky; top: 90px; }
+
+.section-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+/* ── Card ──────────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.8rem;
+  position: relative;
+  overflow: hidden;
+}
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0.5;
+}
+
+/* ── Form ──────────────────────────────────────────────────────────────────── */
+.form-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.35rem;
+  margin-bottom: 1.5rem;
+  color: var(--text);
+}
+.form-title em { color: var(--accent); font-style: italic; }
+
+.field { margin-bottom: 1.1rem; }
+
+label {
+  display: block;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+  text-transform: uppercase;
+}
+
+input, textarea, select {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.65rem 0.9rem;
+  font-family: 'Crimson Pro', serif;
+  font-size: 1rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--glow);
+}
+textarea { resize: vertical; min-height: 80px; }
+select option { background: #1c1c22; }
+
+.color-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+.color-swatch {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s;
+}
+.color-swatch:hover    { transform: scale(1.15); }
+.color-swatch.selected { border-color: var(--text); transform: scale(1.15); }
+
+/* ── Buttons ───────────────────────────────────────────────────────────────── */
+.btn {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  padding: 0.75rem 1.4rem;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+}
+.btn-primary {
+  background: var(--accent);
+  color: #0d0d0f;
+  font-weight: 500;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+.btn-primary:hover {
+  background: #d9bc82;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(200,169,110,0.3);
+}
+.btn-secondary {
+  background: var(--surface2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid rgba(224,92,106,0.3);
+}
+.btn-danger:hover { background: rgba(224,92,106,0.1); }
+.btn-sm { padding: 0.4rem 0.8rem; font-size: 0.68rem; }
+
+/* ── Stats Row ─────────────────────────────────────────────────────────────── */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.stat-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+  text-align: center;
+}
+.stat-num {
+  font-family: 'Playfair Display', serif;
+  font-size: 2rem;
+  color: var(--accent);
+  display: block;
+  line-height: 1;
+  margin-bottom: 0.3rem;
+}
+.stat-lbl {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+/* ── Top Bar ───────────────────────────────────────────────────────────────── */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.search-wrap { position: relative; flex: 1; max-width: 300px; }
+.search-wrap input { padding-left: 2.2rem; }
+.search-icon {
+  position: absolute;
+  left: 0.75rem; top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+.filter-tabs { display: flex; gap: 0.4rem; }
+.tab {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.4rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tab.active           { background: var(--accent); color: #0d0d0f; border-color: var(--accent); font-weight: 500; }
+.tab:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+
+/* ── Events Grid ───────────────────────────────────────────────────────────── */
+#events-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.2rem;
+}
+
+.event-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.4rem;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+  animation: fadeUp 0.35s ease;
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.event-card:hover  { transform: translateY(-3px); box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
+.event-card .color-bar { position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+.event-card.past   { opacity: 0.55; }
+.event-card.today  { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 20px var(--glow); }
+.event-card.overdue { border-color: var(--danger); }
+
+.event-cat {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+.event-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 0.4rem;
+  line-height: 1.3;
+}
+.event-desc {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 0.9rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.event-datetime {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--accent);
+  margin-bottom: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.event-datetime.past-time  { color: var(--text-dim); }
+.event-datetime.today-time { color: var(--success); }
+
+.countdown {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-bottom: 0.9rem;
+  padding: 0.3rem 0.6rem;
+  background: var(--surface2);
+  border-radius: 4px;
+  display: inline-block;
+}
+.countdown.urgency { color: var(--danger); background: rgba(224,92,106,0.08); }
+.countdown.done    { color: var(--text-dim); }
+
+.event-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--text-dim);
+}
+.empty-state .big { font-size: 3rem; margin-bottom: 1rem; }
+.empty-state p    { font-size: 1rem; }
+
+/* ── DB Badge ──────────────────────────────────────────────────────────────── */
+.db-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--success);
+  background: rgba(78,203,141,0.08);
+  border: 1px solid rgba(78,203,141,0.2);
+  padding: 0.25rem 0.6rem;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.db-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--success);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+/* ── Modal ─────────────────────────────────────────────────────────────────── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  z-index: 300;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2rem;
+  width: 90%;
+  max-width: 500px;
+  position: relative;
+  animation: modalIn 0.25s ease;
+}
+@keyframes modalIn {
+  from { transform: scale(0.95); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+.modal-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.4rem;
+  margin-bottom: 1.5rem;
+  color: var(--accent);
+}
+.modal-close {
+  position: absolute;
+  top: 1rem; right: 1rem;
+  background: none; border: none;
+  color: var(--text-muted);
+  font-size: 1.2rem; cursor: pointer;
+}
+.modal-close:hover { color: var(--text); }
+.modal-actions { display: flex; gap: 0.7rem; margin-top: 1.5rem; }
+
+/* ── Responsive ────────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .container            { grid-template-columns: 1fr; }
+  .sidebar              { position: static; }
+  .stats-row            { grid-template-columns: repeat(2, 1fr); }
+}
+  </style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────────────────────── -->
+<header>
+  <div class="logo">Event<span>ide</span></div>
+  <div style="display:flex;align-items:center;gap:1.2rem;">
+    <div class="db-badge"><span class="db-dot"></span> Encrypted DB</div>
+    <div class="header-meta">
+      <div id="clock">—</div>
+      <div><strong id="event-count">0</strong> events stored</div>
+    </div>
+  </div>
+</header>
+
+<div id="notif-bar"></div>
+
+<div class="container">
+  <aside class="sidebar">
+    <div class="section-label">Add / Edit Event</div>
+    <div class="card">
+      <div class="form-title" id="form-heading">New <em>Event</em></div>
+      <input type="hidden" id="edit-id">
+      <div class="field">
+        <label>Event Title *</label>
+        <input type="text" id="f-title" placeholder="What's happening?">
+      </div>
+      <div class="field">
+        <label>Description</label>
+        <textarea id="f-desc" placeholder="Details, notes, agenda…"></textarea>
+      </div>
+      <div class="field">
+        <label>Date &amp; Time *</label>
+        <input type="datetime-local" id="f-datetime">
+      </div>
+      <div class="field">
+        <label>Category</label>
+        <select id="f-cat">
+          <option value="General">General</option>
+          <option value="Work">Work</option>
+          <option value="Personal">Personal</option>
+          <option value="Health">Health</option>
+          <option value="Social">Social</option>
+          <option value="Travel">Travel</option>
+          <option value="Education">Education</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Color Tag</label>
+        <div class="color-row" id="color-picker">
+          <div class="color-swatch selected" data-color="#c8a96e" style="background:#c8a96e"></div>
+          <div class="color-swatch" data-color="#7c6fcd" style="background:#7c6fcd"></div>
+          <div class="color-swatch" data-color="#4ecb8d" style="background:#4ecb8d"></div>
+          <div class="color-swatch" data-color="#e05c6a" style="background:#e05c6a"></div>
+          <div class="color-swatch" data-color="#5badee" style="background:#5badee"></div>
+          <div class="color-swatch" data-color="#f0a04b" style="background:#f0a04b"></div>
+          <div class="color-swatch" data-color="#e87eb8" style="background:#e87eb8"></div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Notify me (minutes before)</label>
+        <select id="f-notify">
+          <option value="0">At event time</option>
+          <option value="5">5 minutes before</option>
+          <option value="15" selected>15 minutes before</option>
+          <option value="30">30 minutes before</option>
+          <option value="60">1 hour before</option>
+          <option value="1440">1 day before</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="saveEvent()">✦ Save Event</button>
+      <button class="btn btn-secondary btn-sm" id="cancel-btn"
+              style="width:100%;margin-top:0.6rem;display:none"
+              onclick="clearForm()">✕ Cancel Edit</button>
+    </div>
+  </aside>
+
+  <main>
+    <div class="stats-row">
+      <div class="stat-box"><span class="stat-num" id="s-total">0</span><span class="stat-lbl">Total</span></div>
+      <div class="stat-box"><span class="stat-num" id="s-upcoming">0</span><span class="stat-lbl">Upcoming</span></div>
+      <div class="stat-box"><span class="stat-num" id="s-today">0</span><span class="stat-lbl">Today</span></div>
+      <div class="stat-box"><span class="stat-num" id="s-past">0</span><span class="stat-lbl">Past</span></div>
+    </div>
+    <div class="top-bar">
+      <div class="section-label" style="margin:0">Events</div>
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input type="text" id="search-input" placeholder="Search events…">
+      </div>
+      <div class="filter-tabs">
+        <button class="tab active" data-filter="all"      onclick="setFilter(this)">All</button>
+        <button class="tab"        data-filter="upcoming" onclick="setFilter(this)">Upcoming</button>
+        <button class="tab"        data-filter="today"    onclick="setFilter(this)">Today</button>
+        <button class="tab"        data-filter="past"     onclick="setFilter(this)">Past</button>
+      </div>
+    </div>
+    <div id="events-grid"></div>
+  </main>
+</div>
+
+<div class="modal-overlay" id="del-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title">Delete Event</div>
+    <p style="color:var(--text-muted);font-size:1rem;">
+      Are you sure you want to remove
+      <strong id="del-title" style="color:var(--text)"></strong>?
+      This cannot be undone.
+    </p>
+    <div class="modal-actions">
+      <button class="btn btn-danger"    onclick="confirmDelete()">Delete</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================
+     SOURCE: db.js
+     ================================================ -->
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// db.js — Eventide Encrypted Database
+// XOR cipher + Base64 encoding over localStorage
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DB_KEY    = 'eventide_v1';
+const NOTIF_KEY = 'notified_ids';
+const SECRET    = 'Ev3nt1d3$3cr3t!K3y';
+
+// ── Encryption ────────────────────────────────────────────────────────────────
+
+function xorEncrypt(text, key) {
+  let result = '';
+  for (let i = 0; i < text.length; i++) {
+    result += String.fromCharCode(
+      text.charCodeAt(i) ^ key.charCodeAt(i % key.length)
+    );
+  }
+  try {
+    return btoa(unescape(encodeURIComponent(result)));
+  } catch (e) {
+    return btoa(result);
+  }
+}
+
+function xorDecrypt(encoded, key) {
+  try {
+    const raw = decodeURIComponent(escape(atob(encoded)));
+    let out = '';
+    for (let i = 0; i < raw.length; i++) {
+      out += String.fromCharCode(
+        raw.charCodeAt(i) ^ key.charCodeAt(i % key.length)
+      );
+    }
+    return out;
+  } catch (e) {
+    return null;
+  }
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
+function dbSave(data) {
+  const json = JSON.stringify(data);
+  localStorage.setItem(DB_KEY, xorEncrypt(json, SECRET));
+}
+
+function dbLoad() {
+  const raw = localStorage.getItem(DB_KEY);
+  if (!raw) return [];
+  const dec = xorDecrypt(raw, SECRET);
+  if (!dec) return [];
+  try { return JSON.parse(dec); } catch (e) { return []; }
+}
+
+function dbSaveNotified(set) {
+  localStorage.setItem(NOTIF_KEY, JSON.stringify([...set]));
+}
+
+function dbLoadNotified() {
+  return new Set(JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]'));
+}
+</script>
+
+<!-- ================================================
+     SOURCE: app.js
+     ================================================ -->
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// app.js — Eventide Application Logic
+// Depends on: db.js (dbSave, dbLoad, dbSaveNotified, dbLoadNotified)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let events        = dbLoad();
+let currentFilter = 'all';
+let deleteTarget  = null;
+let selectedColor = '#c8a96e';
+let notifiedIds   = dbLoadNotified();
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+function escHtml(s) {
+  return (s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function formatDT(iso) {
+  return new Date(iso).toLocaleString('en-IN', {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  });
+}
+
+function isPast(iso)  { return new Date(iso).getTime() < Date.now(); }
+
+function isToday(iso) {
+  const d = new Date(iso), n = new Date();
+  return (
+    d.getFullYear() === n.getFullYear() &&
+    d.getMonth()    === n.getMonth()    &&
+    d.getDate()     === n.getDate()
+  );
+}
+
+function countdown(iso) {
+  const now    = Date.now();
+  const target = new Date(iso).getTime();
+  const diff   = target - now;
+
+  if (diff < 0) {
+    const ago = -diff;
+    if (ago < 3_600_000)  return { text: `${Math.floor(ago / 60_000)}m ago`,  cls: 'done' };
+    if (ago < 86_400_000) return { text: `${Math.floor(ago / 3_600_000)}h ago`, cls: 'done' };
+    return { text: `${Math.floor(ago / 86_400_000)}d ago`, cls: 'done' };
+  }
+
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 60)         return { text: `In ${mins}m`, cls: 'urgency' };
+  if (diff < 86_400_000) return { text: `In ${Math.floor(diff / 3_600_000)}h ${mins % 60}m`, cls: mins < 120 ? 'urgency' : '' };
+  return { text: `In ${Math.floor(diff / 86_400_000)}d`, cls: '' };
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+function showNotif(title, body, urgent = false) {
+  const bar  = document.getElementById('notif-bar');
+  const card = document.createElement('div');
+  card.className = 'notif-card' + (urgent ? ' urgent' : '');
+  card.innerHTML = `
+    <span class="notif-icon">${urgent ? '🔔' : '📅'}</span>
+    <div class="notif-text">
+      <div class="notif-title">${urgent ? 'NOW' : 'REMINDER'}</div>
+      <div class="notif-body"><strong>${escHtml(title)}</strong> — ${escHtml(body)}</div>
+    </div>
+    <button class="notif-close" onclick="this.parentElement.remove()">✕</button>`;
+  bar.appendChild(card);
+
+  // Browser push notification
+  if (Notification.permission === 'granted') {
+    new Notification(`Eventide: ${title}`, { body });
+  }
+
+  setTimeout(() => { if (card.parentElement) card.remove(); }, 8000);
+}
+
+function checkNotifications() {
+  const now = Date.now();
+  events.forEach(ev => {
+    // Fires exactly when event hits
+    if (isPast(ev.datetime) && new Date(ev.datetime).getTime() > now - 60_000) {
+      const key = ev.id + '_hit';
+      if (!notifiedIds.has(key)) {
+        notifiedIds.add(key);
+        showNotif(ev.title, 'Event is starting now!', true);
+      }
+    }
+    // Pre-event reminder
+    const notifyMs = (ev.notifyBefore || 0) * 60_000;
+    if (notifyMs > 0) {
+      const notifyAt = new Date(ev.datetime).getTime() - notifyMs;
+      const key      = ev.id + '_pre';
+      if (now >= notifyAt && now < notifyAt + 60_000 && !notifiedIds.has(key)) {
+        notifiedIds.add(key);
+        showNotif(ev.title, `Starting in ${ev.notifyBefore} minutes`);
+      }
+    }
+  });
+  dbSaveNotified(notifiedIds);
+}
+
+// ── Rendering ─────────────────────────────────────────────────────────────────
+
+function updateStats() {
+  document.getElementById('s-total').textContent    = events.length;
+  document.getElementById('s-upcoming').textContent = events.filter(e => !isPast(e.datetime)).length;
+  document.getElementById('s-today').textContent    = events.filter(e => isToday(e.datetime)).length;
+  document.getElementById('s-past').textContent     = events.filter(e => isPast(e.datetime)).length;
+  document.getElementById('event-count').textContent = events.length;
+}
+
+function renderEvents() {
+  const q    = document.getElementById('search-input').value.toLowerCase();
+  const grid = document.getElementById('events-grid');
+
+  let filtered = events.filter(ev => {
+    if (q && !ev.title.toLowerCase().includes(q) && !(ev.desc || '').toLowerCase().includes(q)) return false;
+    if (currentFilter === 'upcoming') return !isPast(ev.datetime);
+    if (currentFilter === 'today')    return isToday(ev.datetime);
+    if (currentFilter === 'past')     return isPast(ev.datetime);
+    return true;
+  });
+
+  // Sort: upcoming first, then soonest
+  filtered.sort((a, b) => {
+    const ap = isPast(a.datetime), bp = isPast(b.datetime);
+    if (ap !== bp) return ap ? 1 : -1;
+    return new Date(a.datetime) - new Date(b.datetime);
+  });
+
+  updateStats();
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `
+      <div class="empty-state">
+        <div class="big">✦</div>
+        <p>No events found. Add one to get started.</p>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(ev => {
+    const past    = isPast(ev.datetime);
+    const today   = isToday(ev.datetime);
+    const cd      = countdown(ev.datetime);
+    const dtCls   = past ? 'past-time' : today ? 'today-time' : '';
+    const cardCls = past ? 'past'      : today ? 'today'      : '';
+
+    return `
+    <div class="event-card ${cardCls}" id="card-${ev.id}">
+      <div class="color-bar" style="background:${ev.color || '#c8a96e'}"></div>
+      <div class="event-cat">${escHtml(ev.category || 'General')}</div>
+      <div class="event-title">${escHtml(ev.title)}</div>
+      ${ev.desc ? `<div class="event-desc">${escHtml(ev.desc)}</div>` : ''}
+      <div class="event-datetime ${dtCls}">📅 ${formatDT(ev.datetime)}</div>
+      <div class="countdown ${cd.cls}">${cd.text}</div>
+      <div class="event-actions">
+        <button class="btn btn-secondary btn-sm" onclick="editEvent('${ev.id}')">✏ Edit</button>
+        <button class="btn btn-danger btn-sm"    onclick="askDelete('${ev.id}', '${escHtml(ev.title)}')">✕ Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── CRUD ──────────────────────────────────────────────────────────────────────
+
+function saveEvent() {
+  const id           = document.getElementById('edit-id').value;
+  const title        = document.getElementById('f-title').value.trim();
+  const desc         = document.getElementById('f-desc').value.trim();
+  const datetime     = document.getElementById('f-datetime').value;
+  const category     = document.getElementById('f-cat').value;
+  const notifyBefore = parseInt(document.getElementById('f-notify').value);
+
+  if (!title)    { alert('Please enter a title.');         return; }
+  if (!datetime) { alert('Please pick a date and time.'); return; }
+
+  if (id) {
+    // Update existing
+    const idx = events.findIndex(e => e.id === id);
+    if (idx > -1) {
+      events[idx] = {
+        ...events[idx],
+        title, desc, datetime, category,
+        color: selectedColor, notifyBefore,
+        updatedAt: new Date().toISOString()
+      };
+    }
+  } else {
+    // Create new
+    events.push({
+      id: uid(),
+      title, desc, datetime, category,
+      color: selectedColor, notifyBefore,
+      createdAt: new Date().toISOString()
+    });
+  }
+
+  dbSave(events);
+  clearForm();
+  renderEvents();
+  showNotif(title, id ? 'Event updated.' : 'Event added!');
+}
+
+function editEvent(id) {
+  const ev = events.find(e => e.id === id);
+  if (!ev) return;
+
+  document.getElementById('edit-id').value    = ev.id;
+  document.getElementById('f-title').value    = ev.title;
+  document.getElementById('f-desc').value     = ev.desc || '';
+  document.getElementById('f-datetime').value = ev.datetime;
+  document.getElementById('f-cat').value      = ev.category || 'General';
+  document.getElementById('f-notify').value   = ev.notifyBefore || 15;
+  selectColor(ev.color || '#c8a96e');
+
+  document.getElementById('form-heading').innerHTML = 'Edit <em>Event</em>';
+  document.getElementById('cancel-btn').style.display = 'block';
+  document.querySelector('.sidebar').scrollIntoView({ behavior: 'smooth' });
+}
+
+function askDelete(id, title) {
+  deleteTarget = id;
+  document.getElementById('del-title').textContent = title;
+  document.getElementById('del-modal').classList.add('open');
+}
+
+function confirmDelete() {
+  if (!deleteTarget) return;
+  events = events.filter(e => e.id !== deleteTarget);
+  dbSave(events);
+  closeModal();
+  renderEvents();
+}
+
+function closeModal() {
+  document.getElementById('del-modal').classList.remove('open');
+  deleteTarget = null;
+}
+
+function clearForm() {
+  document.getElementById('edit-id').value    = '';
+  document.getElementById('f-title').value    = '';
+  document.getElementById('f-desc').value     = '';
+  document.getElementById('f-datetime').value = '';
+  document.getElementById('f-cat').value      = 'General';
+  document.getElementById('f-notify').value   = '15';
+  selectColor('#c8a96e');
+  document.getElementById('form-heading').innerHTML   = 'New <em>Event</em>';
+  document.getElementById('cancel-btn').style.display = 'none';
+}
+
+// ── Color Picker ──────────────────────────────────────────────────────────────
+
+function selectColor(color) {
+  selectedColor = color;
+  document.querySelectorAll('.color-swatch').forEach(s => {
+    s.classList.toggle('selected', s.dataset.color === color);
+  });
+}
+
+// ── Filter Tabs ───────────────────────────────────────────────────────────────
+
+function setFilter(btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  currentFilter = btn.dataset.filter;
+  renderEvents();
+}
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleString('en-IN', {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  });
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Request browser notification permission
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+
+  // Color picker delegation
+  document.getElementById('color-picker').addEventListener('click', e => {
+    const sw = e.target.closest('.color-swatch');
+    if (sw) selectColor(sw.dataset.color);
+  });
+
+  // Search live filter
+  document.getElementById('search-input').addEventListener('input', renderEvents);
+
+  // Set datetime input floor
+  document.getElementById('f-datetime').min =
+    new Date(Date.now() - 86_400_000 * 365).toISOString().slice(0, 16);
+
+  // Kick off
+  updateClock();
+  setInterval(updateClock, 1000);
+  setInterval(checkNotifications, 30_000);
+  checkNotifications();
+  renderEvents();
+});
+</script>
+
+</body>
+</html>
